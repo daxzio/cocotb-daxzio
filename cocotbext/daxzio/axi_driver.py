@@ -4,20 +4,16 @@ import itertools
 from random import randint, seed
 from cocotb import start_soon
 from cocotb.triggers import RisingEdge
-from cocotbext.axi import AxiBus, AxiMaster, AxiStreamBus, AxiStreamSource, AxiStreamSink, AxiStreamMonitor
+from cocotbext.axi import AxiBus, AxiLiteBus
+from cocotbext.axi import AxiMaster, AxiStreamBus, AxiStreamSource, AxiStreamSink, AxiStreamMonitor, AxiStreamFrame
+from cocotbext.axi import AxiSlave, AxiLiteSlave, AxiLiteRam, AxiLiteRamWrite, AxiSlaveWrite
+from .cocotbext_logger import CocoTBExtLogger
 
 def tobytes(val, length=4):
     array = []
     for i in range(length):
         array.append((val>>(8*i))&0xff)
     return bytearray(array)
-
-def tointeger(val):
-    result = 0
-    for i, j in enumerate(val):
-        #print(i, j)
-        result += int(j) << (8*i)
-    return result
 
 def cycle_pause(seednum=7):
     seed(seednum)
@@ -30,6 +26,103 @@ def cycle_pause(seednum=7):
         else:
             array.append(0)
     return itertools.cycle(array)
+
+class AxiSinkWrite(CocoTBExtLogger):
+    def __init__(self, dut, axi_prefix="m_axi", clk_name="m_aclk", reset_name=None, seednum=None, target=None):
+        CocoTBExtLogger.__init__(self, type(self).__name__)
+#         self.ram = SparseMemoryRegion()
+        if reset_name is None:
+            self.axi_slave = AxiSlaveWrite(AxiBus.from_prefix(dut, axi_prefix).write, getattr(dut, clk_name), target=target)
+        else:
+            self.axi_slave = AxiSlaveWrite(AxiBus.from_prefix(dut, axi_prefix).write, getattr(dut, clk_name), getattr(dut, reset_name))
+        self.enable_logging()
+#         self.arid = 4
+        self.awid = 4
+        self.axi_slave.log.setLevel(logging.WARNING)
+        if seednum is not None:
+            self.base_seed = seednum
+        else:
+            self.base_seed = randint(0,0xffffff)
+        seed(self.base_seed)
+        self.log.debug(f"Seed is set to {self.base_seed}")
+        #self.axi_slave.log.setLevel(logging.DEBUG)
+#         self.axi_slave.read_if.log.setLevel(logging.WARNING)
+
+    async def _write(self, address, data):
+        self.write(address % self.size, data)
+    
+    async def end_tx(self):
+        while self.axi_slave.b_channel.empty():
+            await RisingEdge(self.axi_slave.clock)
+        while not self.axi_slave.b_channel.empty():
+            await RisingEdge(self.axi_slave.clock)
+    
+    async def verify_memory(self, addr, data=None):
+        self.data = data
+        x = await self.axi_slave.target.read(addr, 4)
+        #print(x)
+        self.returned_val = int.from_bytes(x[::-1])
+        #print(f"0x{y:08x} 0x{data:08x}")
+
+        if not self.returned_val == self.data and not None == self.data:
+            raise Exception(f"0x{addr:08x}: Expected 0x{self.data:08x} doesn't match returned 0x{self.returned_val:08x}")
+        
+#     def enable_logging(self):
+#         self.axi_slave.log.setLevel(logging.DEBUG)
+#     
+#     def disable_logging(self):
+#         self.axi_slave.log.setLevel(logging.WARNING)
+
+    def enable_write_backpressure(self, seednum=None):
+        if seednum is not None:
+            self.base_seed = seednum
+        self.axi_slave.aw_channel.set_pause_generator(cycle_pause(self.base_seed+1))
+        self.axi_slave.w_channel.set_pause_generator(cycle_pause(self.base_seed+2))
+        self.axi_slave.b_channel.set_pause_generator(cycle_pause(self.base_seed+3))
+    
+    def enable_backpressure(self, seednum=None):
+        self.enable_write_backpressure(seednum)      
+
+    def disable_backpressure(self):
+        self.axi_slave.aw_channel.set_pause_generator(itertools.cycle([0,]))
+        self.axi_slave.w_channel.set_pause_generator(itertools.cycle([0,]))
+        self.axi_slave.b_channel.set_pause_generator(itertools.cycle([0,]))
+        
+class AxiSink(CocoTBExtLogger):
+    def __init__(self, dut, axi_prefix="m_axi", clk_name="m_aclk", reset_name=None, seednum=None):
+        CocoTBExtLogger.__init__(self, type(self).__name__)
+        self.enable_logging()
+        if reset_name is None:
+            self.axi_slave = AxiSlave(AxiBus.from_prefix(dut, axi_prefix), getattr(dut, clk_name))
+        else:
+            self.axi_slave = AxiSlave(AxiBus.from_prefix(dut, axi_prefix), getattr(dut, clk_name), getattr(dut, reset_name))
+        self.arid = 4
+        self.awid = 4
+        self.axi_slave.write_if.log.setLevel(logging.WARNING)
+        self.axi_slave.read_if.log.setLevel(logging.WARNING)
+        
+
+
+class AxiLiteSink(CocoTBExtLogger):
+    def __init__(self, dut, axi_prefix="m_axi", clk_name="m_aclk", reset_name=None, seednum=None):
+        CocoTBExtLogger.__init__(self, type(self).__name__)
+        self.enable_logging()
+        if reset_name is None:
+            self.axi_slave = AxiLiteSlave(AxiLiteBus.from_prefix(dut, axi_prefix), getattr(dut, clk_name))
+        else:
+            self.axi_slave = AxiLiteSlave(AxiLiteBus.from_prefix(dut, axi_prefix), getattr(dut, clk_name), getattr(dut, reset_name))
+        self.arid = 4
+        self.awid = 4
+        self.axi_slave.write_if.log.setLevel(logging.WARNING)
+        self.axi_slave.read_if.log.setLevel(logging.WARNING)
+
+#         if seednum is not None:
+#             self.base_seed = seednum
+#         else:
+#             self.base_seed = randint(0,0xffffff)
+#         seed(self.base_seed)
+#         self.log.debug(f"Seed is set to {self.base_seed}")
+
     
 class AxiDriver:
     def __init__(self, dut, axi_prefix="s_axi", clk_name="s_aclk", reset_name=None, seednum=None):
@@ -69,11 +162,11 @@ class AxiDriver:
     def returned_val(self):
         if hasattr(self.read_op, "data"):
             if hasattr(self.read_op.data, "data"):
-                return tointeger(self.read_op.data.data)
+                return int.from_bytes(self.read_op.data.data, byteorder='little')
             else:
-                return tointeger(self.read_op.data)
+                return int.from_bytes(self.read_op.data, byteorder='little')
         else:
-            return tointeger(self.read_op)
+            return int.from_bytes(self.read_op, byteorder='little')
             
     def enable_logging(self):
         self.log.setLevel(logging.DEBUG)
@@ -150,6 +243,7 @@ class AxiDriver:
         if debug:
             self.log.debug(f"Write 0x{self.addr:08x}: 0x{self.data:0{self.length*2}x}")
         bytesdata = tobytes(self.data, self.length)
+        #bytesdata = self.data.to_bytes(self.length, 'little')
         await self.axi_master.write(addr, bytesdata, awid=self.arid)
 
     async def rmodw(self, addr, data, length=None, debug=True):
@@ -199,6 +293,7 @@ class AxiDriver:
         if debug:
             self.log.debug(f"Write 0x{self.addr:08x}: 0x{self.data:08x}")
         bytesdata = tobytes(self.data, self.length)
+        #bytesdata = self.data.to_bytes(self.length, 'little')
         self.write_op = self.axi_master.init_write(self.addr, bytesdata, awid=self.arid)
 
     
@@ -212,6 +307,7 @@ class AxiStreamDriver:
         else:
             self.axis_source = AxiStreamSource(AxiStreamBus.from_prefix(dut, axi_prefix), getattr(dut, clk_name), dut.reset)
         self.axis_source.log.setLevel(logging.WARNING)
+        self.tdata_length = len(self.axis_source.bus.tdata)
         #self.enable_backpressure()
         
         
@@ -229,15 +325,20 @@ class AxiStreamDriver:
         #self.axis_source.clear_pause_generator()
         self.axis_source.set_pause_generator(itertools.cycle([0,]))
     
-    async def write(self, data, length=None):
+    async def write(self, tdata, length=None, **kwargs):
         if length is None:
-            if 0 == data:
-                length = 4
+            if 0 == tdata:
+                length = int(self.tdata_length/8)
             else:
-                length = math.ceil(math.log2(data)/32)*4
-        self.log.debug(f"Write 0x{data:08x}")
-        bytesdata = tobytes(data, length)
-        await self.axis_source.write(bytesdata)
+                length = math.ceil(math.log2(tdata)/self.tdata_length)*int(self.tdata_length/8)
+        self.log.debug(f"Write 0x{tdata:08x}")
+        #bytesdata = tdata.to_bytes(length, 'little')
+        bytesdata = tobytes(tdata, length)
+        frame = AxiStreamFrame(bytesdata, **kwargs)
+        await self.axis_source.write(frame)
+
+    async def wait(self):
+        await self.axis_source.wait()
 
 class AxiStreamReceiver:
     def __init__(self, dut, axi_prefix="s_axi", clk_name="s_aclk", reset_name=None, seednum=None):

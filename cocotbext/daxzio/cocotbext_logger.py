@@ -1,6 +1,6 @@
 """
 
-Copyright (c) 2023 Daxzio
+Copyright (c) 2023 Dave Keeshan
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -21,11 +21,17 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
 """
+import logging
 
-from .version import __version__
+class CocoTBExtLogger:
+    def __init__(self, name="default", enable=True):
+        self.name = name
+        self.log = logging.getLogger(f"cocotb.{self.name}")
+        if enable:
+            self.enable_logging()
 
-from .axi_driver import AxiSink
-from .axi_driver import AxiSinkWrite
-from .axi_driver import AxiDriver
-from .axi_driver import AxiStreamDriver
-from .clkreset import ClkReset
+    def enable_logging(self):
+        self.log.setLevel(logging.DEBUG)
+    
+    def disable_logging(self):
+        self.log.setLevel(logging.WARNING)

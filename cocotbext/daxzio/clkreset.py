@@ -3,10 +3,15 @@ from cocotb import start_soon
 from cocotb.triggers import RisingEdge, Timer
 
 class ClkReset:
-    def __init__(self, dut, period=10, reset_length=100, reset_sense=1, clkname='clk', resetname='resetn'):
+    def __init__(self, dut, period=10, clk_freq=None, reset_length=100, reset_sense=1, clkname='clk', resetname='reset'):
         self.clk = getattr(dut, clkname)
         self.reset = getattr(dut, resetname)
-        self.period = period
+        self.clk_freq = clk_freq
+        if not self.clk_freq is None:
+            self.period = 1000/self.clk_freq
+        else:
+            self.period = period
+        #print(f"clock period {self.period} {self.clk_freq}")
         self.reset_length = reset_length
         self.reset_sense = reset_sense
         
