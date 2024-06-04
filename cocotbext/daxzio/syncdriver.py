@@ -3,6 +3,7 @@ from cocotb.triggers import RisingEdge, FallingEdge, Timer
 
 class syncDriver:
     def __init__(self, vsync=None, rsync=None, gsync=None, bsync=None, vsync_freq=60, offset_start=10):
+        self.offset_start = offset_start
         self.vsync = vsync
         self.vsync_freq = vsync_freq
         self.vsync_delay = 1000000000/self.vsync_freq
@@ -10,7 +11,6 @@ class syncDriver:
         start_soon(self._vsync())
         
         self.rgbsync = [rsync, gsync, bsync]
-        self.offset_start = offset_start
 
         self.t0_delay = [5000, 5000, 5000]
         self.t1_delay = [100000000/self.vsync_freq, 100000000/self.vsync_freq, 100000000/self.vsync_freq]
