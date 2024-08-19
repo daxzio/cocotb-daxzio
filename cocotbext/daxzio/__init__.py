@@ -26,6 +26,10 @@ from .version import __version__
 
 from .axi_driver import AxiSink
 from .axi_driver import AxiSinkWrite
+from .axi_driver import AxiSinkRead
 from .axi_driver import AxiDriver
 from .axi_driver import AxiStreamDriver
+from .axi_driver import AxiStreamReceiver
 from .clkreset import ClkReset
+from .clkreset import Clk
+from .clkreset import Reset
