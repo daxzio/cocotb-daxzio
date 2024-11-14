@@ -1,13 +1,14 @@
 import logging
 from cocotb.triggers import RisingEdge
 from cocotbext.uart import UartSource, UartSink
-from clio.interfaces.clio import Clio
+from reue.interfaces.reue import Reue
 
 class UartBypass:
     
-    def __init__(self, dut, clk, uart_in='uart_txd_in', uart_out='uart_rxd_out'):
+    def __init__(self, dut, clk, uart_in=None, uart_out=None, baud=230400):
         self.log = logging.getLogger(f"cocotb.UartBypass")
         self.clk = clk
+        self.baud = int(baud)
         self.uart_disable = dut.uart_disable
         self.wfifo_wr_en = dut.wfifo_wr_en
         self.wfifo_din = dut.wfifo_din
@@ -23,10 +24,15 @@ class UartBypass:
         self.enable_logging()
         self.fake_delay = 8
 
-        self.uart_source = UartSource(getattr(dut, uart_in), baud=230400, bits=8)
-        self.uart_sink   = UartSink(getattr(dut, uart_out), baud=230400, bits=8)
+
+        if uart_in is None:
+            uart_in = getattr(dut, 'uart_txd_in')
+        self.uart_source = UartSource(uart_in, baud=self.baud, bits=8)
+        if uart_out is None:
+            uart_out = getattr(dut, 'uart_rxd_out')
+        self.uart_sink   = UartSink(uart_out, baud=self.baud, bits=8)
         
-        self.clio = Clio()
+        self.reue = Reue()
 
     def enable_logging(self):
         self.log.setLevel(logging.DEBUG)
@@ -36,29 +42,29 @@ class UartBypass:
     
     @property
     def bytes(self):
-        return self.clio.bytes
+        return self.reue.bytes
     
     @property
     def data(self):
-        return self.clio.data
+        return self.reue.data
     
     @property
     def length(self):
-        return self.clio.length
+        return self.reue.length
     
     @property
     def return_bytes(self):
-        return self.clio.return_bytes
+        return self.reue.return_bytes
     
     @property
     def bytearray(self):
-        return self.clio.bytearray
+        return self.reue.bytearray
     
     def gen_write(self, *args, **kwargs):
-        return self.clio.gen_write(*args, **kwargs)
+        return self.reue.gen_write(*args, **kwargs)
 
     def gen_read(self, *args, **kwargs):
-        return self.clio.gen_read(*args, **kwargs)
+        return self.reue.gen_read(*args, **kwargs)
 
     async def disable_uart(self):
         await RisingEdge(self.clk)
