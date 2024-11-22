@@ -33,3 +33,4 @@ from .axi_driver import AxiStreamReceiver
 from .clkreset import ClkReset
 from .clkreset import Clk
 from .clkreset import Reset
+from .detect_clk import detect_clk
